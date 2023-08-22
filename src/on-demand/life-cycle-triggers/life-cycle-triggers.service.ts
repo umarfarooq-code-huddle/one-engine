@@ -50,7 +50,7 @@ export class LifeCycleTriggersService {
 
   @Cron(
     //'0 0,2,3,5,7,9,10,12,13,15,17,19,20,22,23,25,27,29,30,32,33,35,37,39,40,42,43,45,47,49,50,52,53,55,57,59 * * * *',
-    CronExpression.EVERY_MINUTE,
+    CronExpression.EVERY_30_SECONDS,
   )
   triggerLiveCycleMethods() {
     const clients = this.clientService.registeredClients;
@@ -100,6 +100,81 @@ export class LifeCycleTriggersService {
       SessionSchedulingStage.StartClientRequestConfirmation
     ) {
       this.sesssionStatus = SessionSchedulingStage.TrainerBatchesConfirmed;
+
+      const trainersNeeded =
+        Math.ceil(this.clientService.registeredClients / 5) * 3;
+
+      const trainersBatch = Math.min(
+        trainersNeeded,
+        this.instructorService.availableInstructors,
+      );
+
+      const sortedInstructors = this.instructorService.sortInstructors();
+
+      // Convert the object into an array of instructors
+      const sortedTrainers = Object.values(sortedInstructors);
+
+      const confirmWorkouts = Math.ceil(trainersBatch / 3);
+
+      // Initialize an array to store the workouts
+      const workouts = [];
+
+      // Initialize an array to keep track of assigned trainers
+      const assignedTrainers = {};
+
+      // Assign lead trainers to workouts
+      for (
+        let workoutNumber = 1;
+        workoutNumber <= confirmWorkouts;
+        workoutNumber++
+      ) {
+        // Get the keys (names) of instructors
+        const instructorNames = Object.keys(sortedInstructors);
+
+        // Determine the lead trainer for this workout
+        const leadTrainerIndex = (workoutNumber - 1) % instructorNames.length;
+        const leadTrainerName = instructorNames[leadTrainerIndex];
+        const leadTrainer = sortedInstructors[leadTrainerName];
+
+        // Update the lead trainer's workout and role
+        leadTrainer.role = 'leadTrainer';
+        leadTrainer.workout = `Workout-${workoutNumber}`;
+        assignedTrainers[leadTrainerName] = leadTrainer;
+
+        // Remove the assigned lead trainer from the object
+        delete sortedInstructors[leadTrainerName];
+
+        // Store the completed workout
+        workouts.push({
+          workoutNumber: `Workout-${workoutNumber}`,
+          trainers: [assignedTrainers[leadTrainerName]],
+        });
+
+        // Clear the assignedTrainers array for the next iteration
+//        assignedTrainers.length = 0;
+      }
+
+      // Assign coaches to workouts if there are remaining trainers
+      let coachNumber = 1;
+      const remainingInstructorNames = Object.keys(sortedInstructors);
+      for (let i = 0; i < remainingInstructorNames.length; i++) {
+        const instructorName = remainingInstructorNames[i];
+        const coach = sortedInstructors[instructorName];
+        coach.role = `coach${coachNumber}`;
+        coach.workout = workouts[i % workouts.length].workoutNumber;
+        coachNumber++;
+      }
+
+      for (const name in assignedTrainers){
+        sortedInstructors[name] = assignedTrainers[name];
+      }
+
+      // Now the 'workouts' array contains the information about trainers assigned to each workout,
+      // and 'sortedInstructors' has been updated with the workout and role information
+      console.log(JSON.stringify(workouts));
+      console.log(JSON.stringify(sortedInstructors));
+      this.instructorService.instructors = sortedInstructors;
+      
     } else if (
       this.sesssionStatus == SessionSchedulingStage.TrainerBatchesConfirmed
     ) {
