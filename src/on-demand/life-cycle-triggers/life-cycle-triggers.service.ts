@@ -16,7 +16,9 @@ export enum SessionSchedulingStage {
 @Injectable()
 export class LifeCycleTriggersService {
   public CLIENTS_PER_WORKOUT = 5;
-  public workouts;
+  public workoutsNeeded;
+  public confirmedWorkouts = 0;
+  public confirmedWorkoutsData;
   public alertStatus;
   public workoutStatus;
   public sesssionStatus: SessionSchedulingStage =
@@ -25,7 +27,7 @@ export class LifeCycleTriggersService {
     private readonly instructorService: InstructorService,
     private readonly clientService: ClientService,
   ) {
-    this.alertStatus = 'Enough';
+    this.alertStatus = 'Normal';
     this.workoutStatus = 'Scheduled';
   }
 
@@ -36,28 +38,30 @@ export class LifeCycleTriggersService {
   }
   initializeIfNot() {
     //  if (this.isCurrentMinuteMultipleOf10()) {
-    console.log('--------LIFE_CYCLE METHOD RESTARTED----------');
+    console.log(
+      '-------------------------LIFE_CYCLE_STARTED------------------------------------',
+    );
     this.sesssionStatus = SessionSchedulingStage.Initialized;
     this.clientService.registeredClients = 0;
-    this.workouts = 0;
+    this.workoutsNeeded = 0;
     this.alertStatus = 'Enough';
     this.instructorService.availableInstructors = 0;
     this.instructorService.neededInstructors = 0;
     this.instructorService.instructors = {};
-    this.clientService.statuses = {};
+    this.clientService.clients = {};
     //   }
   }
 
   @Cron(
     //'0 0,2,3,5,7,9,10,12,13,15,17,19,20,22,23,25,27,29,30,32,33,35,37,39,40,42,43,45,47,49,50,52,53,55,57,59 * * * *',
-    CronExpression.EVERY_30_SECONDS,
+    CronExpression.EVERY_MINUTE,
   )
   triggerLiveCycleMethods() {
     const clients = this.clientService.registeredClients;
     const avInstructors = this.instructorService.availableInstructors;
 
-    this.workouts = Math.ceil(clients / this.CLIENTS_PER_WORKOUT);
-    const totalInstructors = this.workouts * 3;
+    this.workoutsNeeded = Math.ceil(clients / this.CLIENTS_PER_WORKOUT);
+    const totalInstructors = this.workoutsNeeded * 3;
 
     if (this.sesssionStatus == SessionSchedulingStage.DoesNotExist) {
       this.initializeIfNot();
@@ -74,7 +78,7 @@ export class LifeCycleTriggersService {
         this.alertStatus = 'Needed Urgently';
       else if (this.instructorService.neededInstructors > 0)
         this.alertStatus = 'Needed';
-      else this.alertStatus = 'Enough';
+      else this.alertStatus = 'Normal';
     } else if (
       this.sesssionStatus ==
       SessionSchedulingStage.InstructorsAskedForConfirmation
@@ -94,7 +98,7 @@ export class LifeCycleTriggersService {
         i++;
         sortedClients[name].status = 'Confirmed';
       }
-      this.clientService.statuses = sortedClients;
+      this.clientService.clients = sortedClients;
     } else if (
       this.sesssionStatus ==
       SessionSchedulingStage.StartClientRequestConfirmation
@@ -117,7 +121,7 @@ export class LifeCycleTriggersService {
       const confirmWorkouts = Math.ceil(trainersBatch / 3);
 
       // Initialize an array to store the workouts
-      const workouts = [];
+      const workouts = {};
 
       // Initialize an array to keep track of assigned trainers
       const assignedTrainers = {};
@@ -145,13 +149,12 @@ export class LifeCycleTriggersService {
         delete sortedInstructors[leadTrainerName];
 
         // Store the completed workout
-        workouts.push({
-          workoutNumber: `Workout-${workoutNumber}`,
+        workouts[`Workout-${workoutNumber}`] = {
           trainers: [assignedTrainers[leadTrainerName]],
-        });
+        };
 
         // Clear the assignedTrainers array for the next iteration
-//        assignedTrainers.length = 0;
+        //        assignedTrainers.length = 0;
       }
 
       // Assign coaches to workouts if there are remaining trainers
@@ -161,11 +164,14 @@ export class LifeCycleTriggersService {
         const instructorName = remainingInstructorNames[i];
         const coach = sortedInstructors[instructorName];
         coach.role = `coach${coachNumber}`;
-        coach.workout = workouts[i % workouts.length].workoutNumber;
+        coach.workout = `Workout-${i % confirmWorkouts}`;
         coachNumber++;
       }
 
-      for (const name in assignedTrainers){
+      this.confirmedWorkoutsData = workouts;
+      this.confirmedWorkouts = confirmWorkouts;
+
+      for (const name in assignedTrainers) {
         sortedInstructors[name] = assignedTrainers[name];
       }
 
@@ -174,7 +180,6 @@ export class LifeCycleTriggersService {
       console.log(JSON.stringify(workouts));
       console.log(JSON.stringify(sortedInstructors));
       this.instructorService.instructors = sortedInstructors;
-      
     } else if (
       this.sesssionStatus == SessionSchedulingStage.TrainerBatchesConfirmed
     ) {
@@ -184,30 +189,35 @@ export class LifeCycleTriggersService {
     }
 
     console.log(
-      '-----------------------' +
+      '------------------------------' +
         this.sesssionStatus +
-        '--------------------------------',
+        '--------------------------------------',
     );
 
-    console.log('Workouts Needed:' + this.workouts);
+    console.log('Workouts Needed:' + this.workoutsNeeded);
     console.log('Registered Clients:' + clients);
     console.log('Available Instructors:' + avInstructors);
     console.log(
       'Needed Instructors:' + this.instructorService.neededInstructors,
     );
     console.log('Alert Status:' + this.alertStatus);
+
+    console.log('-----------------CLIENTS------------------');
+    console.log(this.clientService.clients);
+    console.log('---------------INSTRUCTORS-----------------');
+    console.log(this.instructorService.instructors);
   }
 
   @Cron(
     //'0 0,2,3,5,7,9,10,12,13,15,17,19,20,22,23,25,27,29,30,32,33,35,37,39,40,42,43,45,47,49,50,52,53,55,57,59 * * * *',
-    CronExpression.EVERY_10_SECONDS,
+    CronExpression.EVERY_5_SECONDS,
   )
   updateEvents() {
     const clients = this.clientService.registeredClients;
     const avInstructors = this.instructorService.availableInstructors;
 
-    this.workouts = Math.ceil(clients / this.CLIENTS_PER_WORKOUT);
-    const totalInstructors = this.workouts * 3;
+    this.workoutsNeeded = Math.ceil(clients / this.CLIENTS_PER_WORKOUT);
+    const totalInstructors = this.workoutsNeeded * 3;
 
     if (avInstructors < totalInstructors) {
       this.instructorService.neededInstructors =
@@ -218,6 +228,10 @@ export class LifeCycleTriggersService {
       this.alertStatus = 'Needed Urgently';
     else if (this.instructorService.neededInstructors > 0)
       this.alertStatus = 'Needed';
-    else this.alertStatus = 'Enough';
+    else this.alertStatus = 'Normal';
+  }
+
+  getWorkoutData(workout) {
+    console.log(this.confirmedWorkouts[workout]);
   }
 }

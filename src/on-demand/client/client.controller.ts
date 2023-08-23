@@ -14,11 +14,16 @@ export class ClientController {
     return this.clientService.getStatus(par);
   }
 
-  @Get('register/:name')
-  setAvailable(@Param('name') par: string) {
-    return this.clientService.register(par);
+  @Get('register/:name/:invitees/:invitedBy')
+  setAvailable(
+    @Param('name') par: string,
+    @Param('invitees') invitees: number,
+    @Param('invitedBy') invitedBy: string,
+  ) {
+    console.log(invitees)
+    return this.clientService.register(par, invitees, invitedBy);
   }
-
+ 
   @Get('rate/:InstructorName/:InstructorRating')
   rateInstructor(
     @Param('InstructorName') iName: string,

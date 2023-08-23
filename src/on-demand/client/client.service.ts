@@ -2,23 +2,64 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class ClientService {
-  public statuses = {};
+  public clients = {};
   public registeredClients = 0;
 
   getStatus(name) {
-    if (this.statuses[name]) return this.statuses[name].status;
+    if (this.clients[name]) return this.clients[name].status;
     else return 'Not Registered';
   }
 
-  register(name) {
-    this.registeredClients += 1;
-    this.statuses[name] = { status: 'Registered', priority: '1' };
-    return this.statuses[name].status;
+  register(name, nInvitees, invitedBy) {
+    if (this.clients[name]) return 'Registered';
+    if (invitedBy != 'None') {
+      const priority = this.clients[invitedBy].priority;
+
+      for (const client in this.clients) {
+        if (
+          client.includes(invitedBy) &&
+          client != invitedBy &&
+          this.clients[client].priority == priority
+        ) {
+          this.clients[name] = this.clients[client];
+          //   delete this.clients[client];
+          delete this.clients[client];
+          break;
+          //delete Object.assign();
+        }
+      }
+
+      return this.clients[name].status;
+    }
+    if (nInvitees == 0) {
+      this.registeredClients += 1;
+      this.clients[name] = {
+        status: 'Registered',
+        priority: this.registeredClients,
+      };
+      return this.clients[name].status;
+    } else {
+      this.registeredClients += 1;
+      this.clients[name] = {
+        status: 'Registered',
+        priority: this.registeredClients,
+      };
+      const priority = this.registeredClients;
+      for (let i = 0; i < nInvitees; i++) {
+        this.clients[name + '-' + (i + 1)] = {
+          status: 'Registered',
+          priority: priority,
+        };
+        this.registeredClients += 1;
+      }
+
+      return this.clients[name].status;
+    }
   }
 
   sortClients() {
     // Convert the object into an array of instructors
-    const clientsArray = Object.entries(this.statuses);
+    const clientsArray = Object.entries(this.clients);
 
     // Sort the array in descending order based on avgRate
     clientsArray.sort(([, a], [, b]) => b['priority'] - a['priority']);
